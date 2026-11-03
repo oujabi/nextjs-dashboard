@@ -1,0 +1,60 @@
+services:
+  # PostgreSQL Database
+  db:
+    image: postgres:16-alpine
+    container_name: nextjs-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: nextjs_dashboard
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # Next.js Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nextjs-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      POSTGRES_URL: postgres://postgres:postgres@db:5432/nextjs_dashboard
+      POSTGRES_PRISMA_URL: postgres://postgres:postgres@db:5432/nextjs_dashboard
+      POSTGRES_URL_NON_POOLING: postgres://postgres:postgres@db:5432/nextjs_dashboard
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_HOST: db
+      POSTGRES_DATABASE: nextjs_dashboard
+      AUTH_SECRET: development-secret-key-change-in-production
+      AUTH_URL: http://localhost:3000/api/auth
+    ports:
+      - "3000:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    networks:
+      - app-network
+    command: pnpm dev --turbopack
+
+volumes:
+  postgres_data:
+
+networks:
+  app-network:
+    driver: bridge
